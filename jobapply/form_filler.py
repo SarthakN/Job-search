@@ -272,14 +272,40 @@ class FormFiller:
             return []
 
     def _radio_option_labels(self, group: Locator) -> dict[str, Locator]:
+        """Map each radio's *option* text to its locator.
+
+        For radios the ``name`` attribute is the shared group key (e.g. "auth"),
+        never the option text, so we deliberately look at the value attribute
+        and the associated/ wrapping label instead.
+        """
         mapping: dict[str, Locator] = {}
         radios = group.locator("input[type='radio']")
         for i in range(radios.count()):
             radio = radios.nth(i)
-            text = self._label_for(radio) or (radio.get_attribute("value") or "")
+            text = self._option_text(radio)
             if text:
                 mapping[text.strip()] = radio
         return mapping
+
+    def _option_text(self, radio: Locator) -> str:
+        # Prefer an explicit value, then a for=/wrapping label, then aria-label.
+        value = (radio.get_attribute("value") or "").strip()
+        if value and value.lower() not in {"on", "true", "false"}:
+            return value
+        elem_id = radio.get_attribute("id") or ""
+        if elem_id:
+            by_for = self._label_by_for(radio, elem_id)
+            if by_for.strip():
+                return by_for.strip()
+        try:
+            wrap = radio.evaluate(
+                "el => { const l = el.closest('label'); return l ? l.innerText : ''; }"
+            )
+            if wrap and wrap.strip():
+                return wrap.strip()
+        except Exception:
+            pass
+        return (radio.get_attribute("aria-label") or "").strip() or value
 
     def _is_actionable(self, el: Locator) -> bool:
         try:

@@ -55,6 +55,22 @@ def test_current_company_and_title():
     assert resolve_answer("Current job title", p).value == "Senior Engineer"
 
 
+def test_authorized_question_not_shadowed_by_country():
+    # Regression: "...work in this country?" must resolve to work-authorization,
+    # not the country field just because it contains the word "country".
+    p = make_profile()
+    ans = resolve_answer("Are you legally authorized to work in this country?", p)
+    assert ans.kind == "boolean"
+    assert ans.value == "Yes"
+
+
+def test_plain_country_question_still_resolves():
+    p = make_profile()
+    ans = resolve_answer("Country of residence", p)
+    assert ans.value == "United Kingdom"
+    assert ans.kind == "choice"
+
+
 def test_unknown_question_returns_none():
     p = make_profile()
     assert resolve_answer("What is your favourite colour?", p) is None

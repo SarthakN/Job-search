@@ -46,40 +46,50 @@ def _boolean_answer(flag: bool) -> Answer:
 def _rules(profile: Profile) -> list[tuple[list[str], Optional[Answer]]]:
     p = profile
     yoe = str(p.years_of_experience) if p.years_of_experience else ""
+    # Ordered specific -> generic. Yes/No and multi-word phrases come before
+    # generic single words (e.g. work-authorization before "country") so a
+    # question like "authorized to work in this country?" isn't captured by the
+    # country rule.
     return [
+        # Work authorisation / logistics (boolean) -- kept first so phrases that
+        # embed generic words like "country" resolve correctly.
+        (
+            ["authorized to work", "legally authorized", "work authorization",
+             "eligible to work", "right to work"],
+            _boolean_answer(p.authorized_to_work),
+        ),
+        (
+            ["require sponsorship", "need sponsorship", "visa sponsorship",
+             "require visa", "sponsorship"],
+            _boolean_answer(p.requires_sponsorship),
+        ),
+        (
+            ["willing to relocate", "open to relocation", "relocate"],
+            _boolean_answer(p.willing_to_relocate),
+        ),
+        (
+            ["years of experience", "years experience", "how many years"],
+            Answer(yoe, kind="numeric", confident=bool(yoe)),
+        ),
+        (["desired salary", "salary expectation", "expected salary", "compensation"], Answer(p.desired_salary, kind="numeric")),
+        (["notice period", "when can you start", "availability", "start date"], Answer(p.notice_period)),
+        # Identity / contact
         (["first name", "given name", "legal first"], Answer(p.first_name)),
         (["last name", "family name", "surname", "legal last"], Answer(p.last_name)),
         (["full name", "your name", "name of applicant"], Answer(p.full_name)),
         (["email"], Answer(p.email)),
-        (["mobile", "phone number", "phone", "contact number"], Answer(p.phone, kind="numeric")),
         (["country code", "phone country"], Answer(p.phone_country_code, kind="choice")),
+        (["mobile", "phone number", "phone", "contact number"], Answer(p.phone, kind="numeric")),
+        (["current company", "employer"], Answer(p.experience[0].company if p.experience else "")),
+        (["current title", "job title", "current role"], Answer(p.experience[0].title if p.experience else "")),
+        (["linkedin"], Answer(p.linkedin_url)),
+        (["portfolio", "website", "personal site", "github"], Answer(p.website)),
+        # Address (generic single words last)
         (["street", "address line", "address"], Answer(p.address)),
         (["city", "town"], Answer(p.city)),
         (["state", "province", "region"], Answer(p.state)),
         (["zip", "postal", "postcode"], Answer(p.postal_code, kind="numeric")),
         (["country"], Answer(p.country, kind="choice")),
-        (["linkedin"], Answer(p.linkedin_url)),
-        (["portfolio", "website", "personal site", "github"], Answer(p.website)),
-        (["current company", "employer"], Answer(p.experience[0].company if p.experience else "")),
-        (["current title", "job title", "current role"], Answer(p.experience[0].title if p.experience else "")),
-        (["desired salary", "salary expectation", "expected salary", "compensation"], Answer(p.desired_salary, kind="numeric")),
-        (["notice period", "when can you start", "availability", "start date"], Answer(p.notice_period)),
-        (
-            ["years of experience", "years experience", "how many years"],
-            Answer(yoe, kind="numeric", confident=bool(yoe)),
-        ),
-        (
-            ["authorized to work", "legally authorized", "work authorization", "eligible to work", "right to work"],
-            _boolean_answer(p.authorized_to_work),
-        ),
-        (
-            ["sponsorship", "require visa", "visa sponsorship", "need sponsorship"],
-            _boolean_answer(p.requires_sponsorship),
-        ),
-        (
-            ["relocate", "willing to relocate", "open to relocation"],
-            _boolean_answer(p.willing_to_relocate),
-        ),
     ]
 
 
@@ -104,13 +114,15 @@ def resolve_answer(question: str, profile: Profile) -> Optional[Answer]:
     if best_key is not None:
         return Answer(profile.screening_answers[best_key], confident=True)
 
-    # 2. Built-in rules.
+    # 2. Built-in rules, first match wins. The table is ordered specific ->
+    #    generic so multi-word phrases ("authorized to work in this country")
+    #    are matched before generic single words ("country").
     for keywords, answer in _rules(profile):
         if answer is None:
             continue
         if any(kw in q for kw in keywords):
-            # An empty value is not a usable answer; treat as unknown so the
-            # field gets flagged for review rather than silently blanked.
+            # An empty value is not a usable answer; treat as low-confidence so
+            # the field is flagged for review rather than silently blanked.
             if answer.value == "" and answer.kind != "boolean":
                 return Answer("", kind=answer.kind, confident=False)
             return answer

@@ -221,25 +221,29 @@ class LinkedInSession:
             return "error"
 
         overall = FillResult()
+        submit_selector = "button[aria-label='Submit application']"
         for step in range(40):  # generous cap; each step is one modal page
             self.rl.action_pause()
             step_result = self.filler.fill_container(modal)
             overall.merge(step_result)
 
-            if self._click_if_present(modal, "button[aria-label='Submit application']", "Submit application"):
+            # Detect the submit button by presence, never by clicking it —
+            # submission must only happen through the gated _finalise_submit.
+            if self._is_visible(modal, submit_selector):
                 return self._finalise_submit(job, modal, overall)
 
-            # Review step before submit
+            # A review step often precedes submit; advancing to it may reveal
+            # the submit button.
             self._click_if_present(modal, "button[aria-label='Review your application']", "Review")
+            if self._is_visible(modal, submit_selector):
+                return self._finalise_submit(job, modal, overall)
+
             # Continue to next step
             advanced = self._click_if_present(
                 modal, "button[aria-label='Continue to next step']", "Next"
             ) or self._click_if_present(modal, "button:has-text('Next')", "Next")
 
             if not advanced:
-                # A submit button may only appear after review.
-                if self._click_if_present(modal, "button[aria-label='Submit application']", "Submit application"):
-                    return self._finalise_submit(job, modal, overall)
                 break
 
             if self._has_error(modal):
@@ -319,6 +323,13 @@ class LinkedInSession:
         except Exception:
             pass
         return False
+
+    def _is_visible(self, scope: Locator, selector: str) -> bool:
+        try:
+            el = scope.locator(selector).first
+            return bool(el.count()) and el.is_visible()
+        except Exception:
+            return False
 
     def _has_error(self, modal: Locator) -> bool:
         try:
