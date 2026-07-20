@@ -76,6 +76,8 @@ def cmd_apply(args: argparse.Namespace) -> int:
         config.auto_submit = True
     if args.headless:
         config.headless = True
+    if args.login_timeout is not None:
+        config.login_timeout_s = args.login_timeout
 
     if not Path(config.profile_path).exists():
         print(
@@ -137,6 +139,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Submit without per-job confirmation (opt-in; rate limited)",
     )
     p_apply.add_argument("--headless", action="store_true", help="Run Chrome headless")
+    p_apply.add_argument(
+        "--login-timeout",
+        type=int,
+        metavar="SECONDS",
+        help="How long to wait for manual LinkedIn sign-in (default: 300)",
+    )
     p_apply.set_defaults(func=cmd_apply)
 
     return parser

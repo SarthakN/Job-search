@@ -34,6 +34,16 @@ DATE_POSTED_MAP = {
     "past-month": "r2592000",
 }
 
+# Logged-in and public/guest search pages use different card markup.
+JOB_CARD_SELECTOR = (
+    "li[data-occludable-job-id], "
+    "div.job-card-container, "
+    "ul.jobs-search__results-list li"
+)
+RESULT_LIST_SELECTOR = (
+    "div.jobs-search-results-list, .scaffold-layout__list, ul.jobs-search__results-list"
+)
+
 
 @dataclass
 class Job:
@@ -69,6 +79,18 @@ class LinkedInSession:
     # ------------------------------------------------------------------
     # Auth
     # ------------------------------------------------------------------
+    def is_logged_in(self) -> bool:
+        """Best-effort check without blocking for manual sign-in."""
+        if self._on_login_page():
+            return False
+        # Authenticated nav shows a profile/me control; guest pages do not.
+        try:
+            return self.page.locator(
+                "img.global-nav__me-photo, button.global-nav__primary-link--me, .global-nav__me"
+            ).count() > 0
+        except Exception:
+            return False
+
     def ensure_logged_in(self, timeout_s: int = 300) -> None:
         """Make sure we have an authenticated session.
 
@@ -117,45 +139,65 @@ class LinkedInSession:
     def open_search(self) -> None:
         url = self.build_search_url()
         self.log(f"Opening search: {url}")
-        self.page.goto(url, wait_until="domcontentloaded")
+        self.page.goto(url, wait_until="domcontentloaded", timeout=60000)
+        # Results render asynchronously on both guest and logged-in pages.
+        try:
+            self.page.locator(JOB_CARD_SELECTOR).first.wait_for(state="attached", timeout=30000)
+        except PWTimeout:
+            self.log("Search page loaded but no job cards appeared yet.")
         self.rl.action_pause()
 
     # ------------------------------------------------------------------
     # Result iteration
     # ------------------------------------------------------------------
-    def iter_jobs(self, max_pages: int = 10) -> Iterator[Job]:
-        """Yield jobs across result pages, lazily loading each card."""
+    def discover_jobs(self, max_pages: int = 10) -> list[Job]:
+        """Collect job metadata from search results before navigating away."""
+        jobs: list[Job] = []
         seen: set[str] = set()
         for page_num in range(max_pages):
             self._scroll_result_list()
-            cards = self.page.locator("li[data-occludable-job-id], div.job-card-container")
+            cards = self.page.locator(JOB_CARD_SELECTOR)
             count = cards.count()
             if count == 0:
                 self.log("No job cards found on this page.")
                 break
+            self.log(f"Found {count} job card(s) on page {page_num + 1}.")
             for i in range(count):
-                card = cards.nth(i)
-                job = self._read_card(card)
+                job = self._read_card(cards.nth(i))
                 if not job or job.job_id in seen:
                     continue
                 seen.add(job.job_id)
-                yield job
+                jobs.append(job)
             if not self._go_to_next_results_page(page_num + 2):
                 break
+        return jobs
+
+    def iter_jobs(self, max_pages: int = 10) -> Iterator[Job]:
+        """Yield jobs across result pages (snapshot collected up front)."""
+        yield from self.discover_jobs(max_pages=max_pages)
 
     def _read_card(self, card: Locator) -> Job | None:
         try:
-            job_id = card.get_attribute("data-occludable-job-id") or ""
-            if not job_id:
-                link = card.locator("a[href*='/jobs/view/']").first
-                href = link.get_attribute("href") if link.count() else ""
-                m = re.search(r"/jobs/view/(\d+)", href or "")
-                job_id = m.group(1) if m else ""
+            job_id = self._job_id_from_card(card)
             if not job_id:
                 return None
-            title = self._safe_text(card.locator("a.job-card-list__title, a.job-card-container__link").first)
-            company = self._safe_text(card.locator(".job-card-container__primary-description, .artdeco-entity-lockup__subtitle").first)
-            location = self._safe_text(card.locator(".job-card-container__metadata-item").first)
+            title = self._safe_text(
+                card.locator(
+                    "a.job-card-list__title, a.job-card-container__link, h3, .base-search-card__title"
+                ).first
+            )
+            company = self._safe_text(
+                card.locator(
+                    ".job-card-container__primary-description, "
+                    ".artdeco-entity-lockup__subtitle, "
+                    ".base-search-card__subtitle, h4"
+                ).first
+            )
+            location = self._safe_text(
+                card.locator(
+                    ".job-card-container__metadata-item, .job-search-card__location"
+                ).first
+            )
             return Job(
                 job_id=job_id,
                 title=title,
@@ -166,9 +208,33 @@ class LinkedInSession:
         except Exception:
             return None
 
+    def _job_id_from_card(self, card: Locator) -> str:
+        job_id = card.get_attribute("data-occludable-job-id") or ""
+        if job_id:
+            return job_id
+        urn = card.get_attribute("data-entity-urn") or ""
+        if m := re.search(r"jobPosting:(\d+)", urn):
+            return m.group(1)
+        # Public cards nest the urn on an inner div.
+        try:
+            inner_urn = card.locator("[data-entity-urn*='jobPosting']").first.get_attribute(
+                "data-entity-urn"
+            )
+            if inner_urn and (m := re.search(r"jobPosting:(\d+)", inner_urn)):
+                return m.group(1)
+        except Exception:
+            pass
+        link = card.locator("a[href*='/jobs/view/']").first
+        href = link.get_attribute("href") if link.count() else ""
+        if m := re.search(r"/jobs/view/[^/]*-(\d+)", href or ""):
+            return m.group(1)
+        if m := re.search(r"/jobs/view/(\d+)", href or ""):
+            return m.group(1)
+        return ""
+
     def _scroll_result_list(self) -> None:
         try:
-            container = self.page.locator("div.jobs-search-results-list, .scaffold-layout__list").first
+            container = self.page.locator(RESULT_LIST_SELECTOR).first
             for _ in range(6):
                 container.evaluate("el => el.scrollBy(0, el.clientHeight)")
                 self.rl.action_pause()
@@ -191,7 +257,7 @@ class LinkedInSession:
     # ------------------------------------------------------------------
     def apply_to_job(self, job: Job) -> str:
         """Open a job and run the Easy Apply flow. Returns a status string."""
-        self.page.goto(job.url, wait_until="domcontentloaded")
+        self.page.goto(job.url, wait_until="domcontentloaded", timeout=30000)
         self.rl.action_pause()
 
         easy_apply = self.page.locator(

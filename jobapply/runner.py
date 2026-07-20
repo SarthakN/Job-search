@@ -11,6 +11,7 @@ from .linkedin import LinkedInSession
 from .profile import Profile
 from .rate_limiter import RateLimiter
 from .tracker import Tracker
+from playwright.sync_api import TimeoutError as PWTimeout
 
 
 def default_confirm(prompt: str) -> bool:
@@ -48,13 +49,28 @@ def run(config: Config, log: Callable[[str], None] = print) -> dict[str, int]:
             confirm=confirm,
             log=log,
         )
-        session.ensure_logged_in()
         session.open_search()
+        if not session.is_logged_in():
+            log("Easy Apply requires a LinkedIn sign-in.")
+            try:
+                session.ensure_logged_in(timeout_s=config.login_timeout_s)
+            except PWTimeout:
+                log(
+                    "Sign-in timed out. Continuing in browse-only mode — jobs will be "
+                    "listed but Easy Apply is unavailable until you sign in."
+                )
+                session.open_search()
 
         try:
-            for job in session.iter_jobs():
-                if rate_limiter.run_limit_reached():
+            jobs = session.discover_jobs()
+            log(f"Discovered {len(jobs)} job(s) to process.")
+            attempted = 0
+            for job in jobs:
+                if attempted >= config.rate_limit.max_applications_per_run:
                     log(f"Reached per-run cap ({config.rate_limit.max_applications_per_run}). Stopping.")
+                    break
+                if rate_limiter.run_limit_reached():
+                    log(f"Reached submission cap ({config.rate_limit.max_applications_per_run}). Stopping.")
                     break
 
                 if config.skip_already_applied and tracker.already_applied(job.job_id):
@@ -82,6 +98,7 @@ def run(config: Config, log: Callable[[str], None] = print) -> dict[str, int]:
                     status=status,
                 )
                 stats[status] = stats.get(status, 0) + 1
+                attempted += 1
 
                 if status in {"submitted", "filled_awaiting_review"}:
                     rate_limiter.record_application()

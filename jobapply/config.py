@@ -44,6 +44,7 @@ class Config:
     # Where Chrome stores the persistent profile (cookies/login).
     user_data_dir: str = ".chrome-profile"
     headless: bool = False
+    login_timeout_s: int = 300
     # If False (default), the tool fills the form and waits for you to submit.
     auto_submit: bool = False
     # Skip jobs already present in the tracker.
