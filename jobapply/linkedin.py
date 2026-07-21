@@ -261,7 +261,10 @@ class LinkedInSession:
         self.rl.action_pause()
 
         easy_apply = self.page.locator(
-            "button.jobs-apply-button, button[aria-label*='Easy Apply']"
+            "button.jobs-apply-button, "
+            "button[aria-label*='Easy Apply'], "
+            "a[aria-label*='Easy Apply'], "
+            "a[href*='openSDUIApplyFlow']"
         ).first
         if easy_apply.count() == 0 or not self._is_easy_apply(easy_apply):
             self.log(f"  Skipping (no Easy Apply): {job.title}")
@@ -274,6 +277,9 @@ class LinkedInSession:
 
     def _is_easy_apply(self, button: Locator) -> bool:
         try:
+            aria = (button.get_attribute("aria-label") or "").lower()
+            if "easy apply" in aria:
+                return True
             text = (button.inner_text() or "").lower()
             return "easy apply" in text
         except Exception:
