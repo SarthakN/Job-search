@@ -65,7 +65,7 @@ python -m jobapply apply
 With a search URL:
 
 ```bash
-python -m jobapply apply --url "https://www.linkedin.com/jobs/search/?keywords=backend%20engineer&f_AL=true"
+python -m jobapply apply --url "https://www.linkedin.com/jobs/search/?currentJobId=4442583339&distance=100.0&f_TPR=r86400&geoId=105214831&keywords=product%20manager&origin=JOB_SEARCH_PAGE_JOB_FILTER&spellCorrectionEnabled=true"
 ```
 
 With keywords and a per-run cap:
