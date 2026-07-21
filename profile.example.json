@@ -1,0 +1,47 @@
+{
+  "first_name": "Ada",
+  "last_name": "Lovelace",
+  "email": "ada@example.com",
+  "phone": "+15551234567",
+  "phone_country_code": "United States (+1)",
+  "address": "1 Analytical Engine Way",
+  "city": "London",
+  "state": "",
+  "postal_code": "SW1A 1AA",
+  "country": "United Kingdom",
+  "linkedin_url": "https://www.linkedin.com/in/ada-lovelace",
+  "website": "https://ada.example.com",
+  "resume_path": "/absolute/path/to/resume.pdf",
+  "cover_letter_path": "",
+  "experience": [
+    {
+      "title": "Senior Software Engineer",
+      "company": "Analytical Engines Ltd",
+      "location": "London, UK",
+      "start_date": "2021-03",
+      "end_date": "Present",
+      "description": "Built distributed systems in Python and Go."
+    }
+  ],
+  "education": [
+    {
+      "school": "University of London",
+      "degree": "BSc",
+      "field_of_study": "Mathematics",
+      "start_date": "2012",
+      "end_date": "2015"
+    }
+  ],
+  "skills": ["Python", "Go", "Distributed Systems", "PostgreSQL"],
+  "screening_answers": {
+    "how did you hear about": "LinkedIn",
+    "why do you want to work": "I am excited about your team's mission and the technical challenges.",
+    "notice period": "4 weeks"
+  },
+  "years_of_experience": 8,
+  "authorized_to_work": true,
+  "requires_sponsorship": false,
+  "willing_to_relocate": false,
+  "desired_salary": "120000",
+  "notice_period": "4 weeks"
+}

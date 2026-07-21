@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# Local runtime data (personal + secrets-ish)
+config.yaml
+profile.json
+applications.csv
+.chrome-profile/
+.chrome-demo/
+resumes/
+*.pdf
+*.docx

@@ -1,0 +1,29 @@
+# Copy to config.yaml and edit. CLI flags override values here.
+
+profile_path: profile.json
+tracker_path: applications.csv
+user_data_dir: .chrome-profile   # Chrome profile dir; keeps you logged in
+headless: false                  # keep false so you can watch / intervene
+
+# When false (default) the tool fills each application and pauses for you to
+# review and confirm before it submits. Set true to submit automatically for
+# applications where every field was filled confidently.
+auto_submit: false
+
+skip_already_applied: true
+
+search:
+  # Either set a full search URL...
+  url: ""
+  # ...or provide keywords + location and let the tool build the URL.
+  keywords: "Backend Engineer"
+  location: "Remote"
+  remote: true
+  easy_apply_only: true          # only Easy Apply jobs can be auto-filled
+  date_posted: "past-week"       # "", past-24h, past-week, past-month
+
+rate_limit:
+  between_applications: [25, 55]  # random seconds between applications
+  between_actions: [0.4, 1.4]     # random seconds between field interactions
+  max_applications_per_run: 15
+  max_applications_per_hour: 20
